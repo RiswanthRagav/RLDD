@@ -1,0 +1,106 @@
+from tensorflow.keras.applications import DenseNet121
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.models import Model
+
+
+# Load the DenseNet121 base model
+base_model = DenseNet121(include_top=False, weights='imagenet', input_shape=(image_size+(3,)))
+
+# Freeze the base model weights
+base_model.trainable = False
+
+# Add a custom classification head
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(1024, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dense(512, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dropout(0.3)(x)
+predictions = Dense(len(labels), activation='softmax')(x)
+
+# Create the DenseNet model
+DenseNet_model = Model(inputs=base_model.input, outputs=predictions)
+
+# Compile the model
+DenseNet_model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"])
+LR = 1e-3
+opt = tf.keras.optimizers.legacy.Adam(learning_rate=LR, decay=LR / epochs)
+early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, min_delta=1e-4)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_delta=1e-4)
+
+callbacks_list = [early_stop, reduce_lr]
+#callbacks_list = [reduce_lr]
+DenseNet_history = DenseNet_model.fit(
+    train_ds,
+    epochs=epochs,
+    validation_data=train_ds,
+    validation_steps=len(test_ds),
+    callbacks=callbacks_list
+)
+# Save the model.
+DenseNet_model.save('DenseNet_model.h5')
+results = pd.DataFrame(columns=['model','accuracy', 'val_accuracy'])
+
+results = results.append({
+    'model': 'DenseNet_model',
+    'accuracy': round(DenseNet_history.history['accuracy'][-1],2),
+    'val_accuracy': round(DenseNet_history.history['val_accuracy'][-1],2),
+    }, ignore_index=True)
+
+
+results
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+fig = make_subplots(rows=2, cols=2, subplot_titles=("train_loss", "val_loss", "train_accuracy", "val_accuracy"))
+
+#====== loss ======
+fig.add_trace(go.Scatter(
+    y=Xception_history.history['loss'],
+    mode='lines+markers',
+    name=f'DenseNet',
+    line=dict(color='blue'),
+), row=1, col=1)
+
+#===== val_loss ======
+fig.add_trace(go.Scatter(
+    y=Xception_history.history['val_loss'],
+    mode='lines+markers',
+    name=f'DenseNet val_loss',
+    line=dict(color='blue'),
+    showlegend=False
+), row=1, col=2)
+
+#===== train_accuracy ======
+fig.add_trace(go.Scatter(
+    y=Xception_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'DenseNet train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
+
+
+
+#===== val_accuracy ======
+fig.add_trace(go.Scatter(
+    y=Xception_history.history['val_accuracy'],
+    mode='lines+markers',
+    name=f'DenseNet val_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=2)
+
+
+fig.update_xaxes(title_text='Epoch')
+fig.update_layout(height=800, width=1000, title_text="Training History Metrics")
+fig.show()
+fig.add_trace(go.Scatter(
+    y=Xception_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'DenseNet_train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
