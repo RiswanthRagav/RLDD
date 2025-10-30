@@ -1,0 +1,116 @@
+from keras.applications import ResNet50
+from keras.models import Model
+from keras.layers import GlobalAveragePooling2D, Dense, BatchNormalization, Dropout
+
+# Define input shape
+input_shape = (224, 224, 3)
+
+# Load the ResNet50 base model
+base_model = ResNet50(include_top=False, weights='imagenet', input_shape=input_shape)
+
+# Freeze the weights of the base model
+base_model.trainable = False
+
+# Add a custom classification head
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(512, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dense(256, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dropout(0.2)(x)
+num_classes = 4  # Replace 10 with the number of classes in your dataset
+predictions = Dense(num_classes, activation='softmax')(x)
+
+# Create a Keras model from the base model and the classification head
+ResNet_model = Model(inputs=base_model.input, outputs=predictions)
+
+# Compile the model
+ResNet_model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"])
+ResNet_model = Model(inputs=base_model.input, outputs=predictions)
+opt = tf.keras.optimizers.legacy.Adam(learning_rate=LR, decay=LR / epochs)
+early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, min_delta=1e-4)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_delta=1e-4)
+
+#callbacks_list = [early_stop, reduce_lr]
+callbacks_list = [reduce_lr]
+ResNet_history = ResNet_model.fit(
+    train_ds,
+    epochs=epochs,
+    validation_data=train_ds,
+    validation_steps=len(test_ds),
+    callbacks=callbacks_list
+)
+ResNet_history = ResNet_model.fit(
+    train_ds,
+    epochs=epochs,
+    validation_data=train_ds,
+    validation_steps=len(test_ds),
+    callbacks=callbacks_list
+)
+# Save the model.
+ResNet_model.save('ResNet_model.h5')
+results = pd.DataFrame(columns=['model','accuracy', 'val_accuracy'])
+
+results = results.append({
+    'model': 'ResNet_model',
+    'accuracy': round(ResNet_history.history['accuracy'][-1],2),
+    'val_accuracy': round(ResNet_history.history['val_accuracy'][-1],2),
+    }, ignore_index=True)
+
+
+results
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+fig = make_subplots(rows=2, cols=2, subplot_titles=("train_loss", "val_loss", "train_accuracy", "val_accuracy"))
+
+#====== loss ======
+fig.add_trace(go.Scatter(
+    y=ResNet_history.history['loss'],
+    mode='lines+markers',
+    name=f'MobileNetV2',
+    line=dict(color='blue'),
+), row=1, col=1)
+
+#===== val_loss ======
+fig.add_trace(go.Scatter(
+    y=ResNet_history.history['val_loss'],
+    mode='lines+markers',
+    name=f'MobileNetV2 val_loss',
+    line=dict(color='blue'),
+    showlegend=False
+), row=1, col=2)
+
+#===== train_accuracy ======
+fig.add_trace(go.Scatter(
+    y=ResNet_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'MobileNetV2 train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
+
+
+
+#===== val_accuracy ======
+fig.add_trace(go.Scatter(
+    y=ResNet_history.history['val_accuracy'],
+    mode='lines+markers',
+    name=f'MobileNetV2 val_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=2)
+
+
+fig.update_xaxes(title_text='Epoch')
+fig.update_layout(height=800, width=1000, title_text="Training History Metrics")
+fig.show()
+fig.add_trace(go.Scatter(
+    y=ResNet_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'ResNet_model train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
