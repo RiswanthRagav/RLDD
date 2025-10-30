@@ -1,0 +1,193 @@
+from google.colab import drive
+drive.mount("/content/gdrive")
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import numpy as np
+import pandas as pd
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, BatchNormalization
+
+from keras.models import Sequential
+from keras.layers.convolutional import Conv2D
+from keras.layers.convolutional import MaxPooling2D
+
+from keras.models import Model, load_model
+from keras.layers import AveragePooling2D
+from keras.applications.densenet import DenseNet121
+from keras.applications.inception_v3 import InceptionV3 #model 1
+from keras.applications.mobilenet_v2 import MobileNetV2 #model 2
+from keras.layers import Activation, Dropout, Flatten, Dense
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint, Callback
+from keras import regularizers
+from keras.applications.densenet import preprocess_input
+
+
+import os
+
+import warnings
+warnings.filterwarnings('ignore')
+# parameters
+data_dir = '/content/gdrive/MyDrive/deep learning/data'
+image_size = (128, 128) #Original: (256, 256)
+batch_size = 16
+val_split = 0.2
+epochs = 10
+
+labels = os.listdir(data_dir)
+augment = ImageDataGenerator(rotation_range=25, width_shift_range=0.1,
+                             height_shift_range=0.1, shear_range=0.2,
+                             zoom_range=0.2, horizontal_flip=True,
+                             fill_mode="nearest")
+for label in labels:
+    directory = os.path.join(data_dir, label)
+    print("Images of label \"" + label + "\":\t", len(os.listdir(directory)))
+import matplotlib.image as mpimg
+
+directory = os.path.join(data_dir, labels[0])
+path = os.path.join(directory, os.listdir(directory)[0])
+image = mpimg.imread(path)
+image.shape
+train_datagen = ImageDataGenerator(rescale=1./255, validation_split=val_split)
+
+train_ds = train_datagen.flow_from_directory(
+    data_dir,
+    target_size=image_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='training',
+    classes=labels
+)
+
+# Test dataset
+test_datagen = ImageDataGenerator(rescale=1./255, validation_split=val_split)
+
+test_ds = test_datagen.flow_from_directory(
+    data_dir,
+    target_size=image_size,
+    batch_size=batch_size,
+    class_mode='categorical',
+    subset='validation',
+    classes=labels
+)
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(30,14))
+
+for i in range(len(labels)):
+    directory = os.path.join(data_dir, labels[i])
+    for j in range(10):
+        path = os.path.join(directory, os.listdir(directory)[j])
+        img = mpimg.imread(path)
+
+        plt.subplot(len(labels), 10, i*10 + j + 1)
+        plt.imshow(img)
+
+        if j == 0:
+            plt.ylabel(labels[i], fontsize=20)
+
+plt.setp(plt.gcf().get_axes(), xticks=[], yticks=[]);
+plt.tight_layout()
+plt.show()
+base_model = InceptionV3(include_top=False, weights='imagenet', input_shape=(image_size+(3,)))
+base_model.trainable = False
+
+# = = = = = TOP NN Model = = = = =
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dense(512, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dense(256, activation='relu')(x)
+x = BatchNormalization()(x)
+x = Dropout(0.2)(x)
+
+# = = = = = Coupling = = = = =
+predictions = Dense(len(labels), activation='softmax')(x)
+
+# = = = = = Complete Model = = = = =
+InceptionV3_model = Model(inputs=base_model.input, outputs=predictions)
+
+for layer in base_model.layers:
+    layer.trainable = False
+
+InceptionV3_model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=["accuracy"],)
+#model.summary()
+LR = 1e-3
+opt = tf.keras.optimizers.Adam(lr=LR, decay=LR / epochs)
+base_model.summary()
+early_stop = EarlyStopping(monitor='val_loss', patience=4, verbose=1, min_delta=1e-4)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, min_delta=1e-4)
+
+callbacks_list = [early_stop, reduce_lr]
+InceptionV3_history = InceptionV3_model.fit(
+    train_ds,
+    epochs=epochs,
+    validation_data=train_ds,
+    validation_steps=len(test_ds),
+    callbacks=callbacks_list
+)
+results = pd.DataFrame(columns=['model','accuracy', 'val_accuracy'])
+
+results = results.append({
+    'model': 'InceptionV3',
+    'accuracy': round(InceptionV3_history.history['accuracy'][-1],2),
+    'val_accuracy': round(InceptionV3_history.history['val_accuracy'][-1],2),
+    }, ignore_index=True)
+
+
+results
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+fig = make_subplots(rows=2, cols=2, subplot_titles=("train_loss", "val_loss", "train_accuracy", "val_accuracy"))
+
+#====== loss ======
+fig.add_trace(go.Scatter(
+    y=InceptionV3_history.history['loss'],
+    mode='lines+markers',
+    name=f'InceptionV3',
+    line=dict(color='blue'),
+), row=1, col=1)
+
+#===== val_loss ======
+fig.add_trace(go.Scatter(
+    y=InceptionV3_history.history['val_loss'],
+    mode='lines+markers',
+    name=f'InceptionV3 val_loss',
+    line=dict(color='blue'),
+    showlegend=False
+), row=1, col=2)
+
+#===== train_accuracy ======
+fig.add_trace(go.Scatter(
+    y=InceptionV3_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'InceptionV3 train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
+
+
+
+#===== val_accuracy ======
+fig.add_trace(go.Scatter(
+    y=InceptionV3_history.history['val_accuracy'],
+    mode='lines+markers',
+    name=f'InceptionV3 val_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=2)
+
+
+fig.update_xaxes(title_text='Epoch')
+fig.update_layout(height=800, width=1000, title_text="Training History Metrics")
+fig.show()
+fig.add_trace(go.Scatter(
+    y=InceptionV3_history.history['accuracy'],
+    mode='lines+markers',
+    name=f'InceptionV3 train_accuracy',
+    line=dict(color='blue'),
+    showlegend=False
+), row=2, col=1)
