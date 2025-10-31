@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rice Leaf Disease Detection</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f1f1f1;
+        background-image:
+            linear-gradient(to left, rgba(255, 255, 255, 0.5), transparent), /* Soft overlay for left image */
+            linear-gradient(to right, rgba(255, 255, 255, 0.5), transparent), /* Soft overlay for right image */
+            url('static/Gemini_Generated_Image.jpeg'),
+            url('static/Gemini_Generated_Image (4).jpeg');
+        background-repeat: no-repeat, no-repeat;
+        background-size: 50% 100%, 50% 100%;
+        background-position: left, right;
+    }
+    .container {
+        width: 400px;
+        padding: 20px;
+        background-color: transparent;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 2; /* Ensure the container is above the background images */
+    }
+    .image-preview {
+        width: 100%;
+        height: auto;
+        background-color: transparent; /* Removed white background */
+        margin-bottom: 20px;
+        overflow: hidden;
+        position: relative;
+        z-index: 1; /* Ensure the preview is above the background images */
+        display: flex;
+        justify-content: center;
+    }
+    .image-preview img {
+        max-width: 100%; /* Ensure the image doesn't exceed its container width */
+        max-height: 100%; /* Ensure the image doesn't exceed its container height */
+        display: block;
+        margin: auto; /* Center the image horizontally */
+    }
+    h2 {
+        font-size: 38px;
+    }
+    button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        border: none;
+        border-radius: 5px;
+        background-color: #007bff;
+        color: #fff;
+        cursor: pointer;
+        z-index: 4; /* Ensure the buttons are above all other elements */
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <h2><i>Rice Leaf Disease Detection</i></h2>
+    <div class="image-preview">
+        <img id="preview-image" src="#" alt="Image Preview" style="display: none;">
+    </div>
+    <input type="file" accept="image/*" id="choose-image" style="display: none;">
+    <label for="choose-image"><button onclick="chooseImage()">Choose Image</button></label>
+    <button type="button" id="predict-btn" onclick="predict()">Predict</button>
+    <div id="prediction-result"></div> <!-- Element to display prediction result -->
+</div>
+
+<script>
+function chooseImage() {
+    document.getElementById('choose-image').click();
+}
+
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+
+        reader.onload = function (e) {
+            document.getElementById('preview-image').setAttribute('src', e.target.result);
+            document.getElementById('preview-image').style.display = 'block';
+        }
+
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+document.getElementById('choose-image').addEventListener('change', function() {
+    previewImage(this);
+});
+
+function predict() {
+    const fileInput = document.getElementById('choose-image');
+    const file = fileInput.files[0];
+
+    if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Show loading indicator
+        showLoadingIndicator();
+
+        // Send AJAX request to the /predict endpoint
+        fetch('/predict', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to predict. Please try again.');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Handle response data (e.g., display prediction result)
+            displayPredictionResult(data);
+            hideLoadingIndicator();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            // Display error message to the user
+            alert('An error occurred while predicting. Please try again.');
+            hideLoadingIndicator();
+        });
+    } else {
+        alert('Please choose an image to predict.');
+    }
+}
+
+function showLoadingIndicator() {
+    // Show loading indicator to the user
+    // You can use a spinner or any other visual element to indicate loading
+}
+
+function hideLoadingIndicator() {
+    // Hide loading indicator once prediction is complete
+}
+
+function displayPredictionResult(data) {
+    // Display prediction result on the webpage
+    var resultDiv = document.getElementById('prediction-result');
+    var predictedClass = data.predicted_class;
+    var cause = '';
+    var remedy = '';
+
+    // Determine cause and remedy based on the predicted class
+    switch (predictedClass) {
+        case 'Brown spot':
+            cause = 'Brown spot is a fungal disease caused by Bipolaris oryzae. It appears as small, circular to oval, brown lesions on leaves, which can coalesce and cause significant damage to the foliage.';
+            remedy = 'Remedy: Cultural Control: Practices like crop rotation, avoiding waterlogging, and maintaining proper plant spacing to enhance air circulation. Chemical Control: Fungicides containing active ingredients such as mancozeb, carbendazim, or propiconazole can be used.';
+            break;
+        case 'Healthy':
+            cause = 'No disease detected';
+            description = 'Observing traits indicates the overall health and vigor of the rice plant, contributing to successful crop production.`';
+            break;
+        case 'Leaf Blast':
+            cause = 'Leaf blast is caused by the fungus Magnaporthe oryzae. It manifests as diamond-shaped lesions with gray centers and dark borders on leaves, eventually leading to extensive damage.';
+            remedy = 'Remedy: Cultural Control: Planting blast-resistant rice varieties is the most effective long-term strategy. Crop rotation, removal of crop debris after harvest. Chemical Control: Fungicides containing active ingredients such as tricyclazole, azoxystrobin, or tebuconazole can be used to .';
+            break;
+        case 'Hispa':
+            cause = 'Hispa is caused by the infestation of a beetle known as Dicladispa armigera. These beetles feed on the leaves of the rice plant, causing characteristic "shot-hole" damage';
+            remedy = 'Remedy:Cultural Control: Intercropping with crops that repel Hispa, like marigold, can be effective. Regular field monitoring and manual removal of beetles and damaged leaves can also help. Chemical Control: Insecticides such as chlorpyrifos, imidacloprid, or thiamethoxam can be applied . ';
+            break;
+        default:
+            cause = 'Cause and remedy information not available';
+            remedy = 'Contact Riswanth Ragav';
+            break;
+    }
+
+    resultDiv.innerHTML = '<p>Predicted class: ' + predictedClass + '</p><p>' + cause + '</p><p>' + remedy + '</p>';
+}
+</script>
+</body>
+</html>
