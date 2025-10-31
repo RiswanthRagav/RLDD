@@ -1,0 +1,188 @@
+!pip install scikit-optimize
+!pip install --upgrade scikit-optimize
+import os
+import numpy as np
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Input, concatenate, Activation
+from tensorflow.keras.applications import ResNet50  # Corrected import statement
+from skopt.utils import use_named_args
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from skopt.space import Real, Integer
+from skopt.optimizer import Optimizer
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, concatenate
+from tensorflow.keras.optimizers import Adam
+# Hyperparameter search space
+search_space = [
+   Integer(low=2, high=4, name='resnet_blocks'),
+    Integer(low=64, high=256, name='dense_units'),
+    Real(low=0.001, high=0.01, prior='log-uniform', name='learning_rate'),
+    Real(low=0.0, high=0.5, prior='uniform', name='dropout_rate'),
+    Real(low=0.0, high=0.01, prior='uniform', name='l2_reg')
+]
+
+# Data paths
+train_datagen = ImageDataGenerator(rescale=1./255, shear_range=0.2, zoom_range=0.2, horizontal_flip=True)
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    '/content/gdrive/MyDrive/dataset', target_size=(224, 224), batch_size=32, class_mode='categorical'
+)
+test_generator = test_datagen.flow_from_directory(
+    '/content/gdrive/MyDrive/dataset', target_size=(224, 224), batch_size=32, class_mode='categorical'
+)
+@use_named_args(search_space)
+def create_model(resnet_blocks, dense_units, learning_rate, dropout_rate, l2_reg):
+    # Pre-trained ResNet50
+    base_model = ResNet50(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    for layer in base_model.layers[:resnet_blocks]:
+        layer.trainable = False  # Freeze pre-trained layers
+
+    # Feature extraction from each ResNet block
+    x1 = base_model.output
+    x2 = base_model.get_layer('conv5_x').output
+    x3 = base_model.get_layer('conv4_6').output
+    x4 = base_model.get_layer('conv4_3').output
+    x5 = base_model.get_layer('conv3_4').output
+
+    # Global average pooling for each feature map
+    x1 = GlobalAveragePooling2D()(x1)
+    x2 = GlobalAveragePooling2D()(x2)
+    x3 = GlobalAveragePooling2D()(x3)
+    x4 = GlobalAveragePooling2D()(x4)
+    x5 = GlobalAveragePooling2D()(x5)
+
+    # Concatenate features and add dense layers
+    merged = concatenate([x1, x2, x3, x4, x5])
+    x = Dense(dense_units, activation='relu')(merged)
+    x = Dropout(dropout_rate)(x)
+    predictions = Dense(train_generator.num_classes, activation='softmax')(x)
+
+    # Create model
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    # Compile model
+    model.compile(optimizer=Adam(learning_rate=learning_rate),
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+
+    return model
+import os
+import warnings
+import numpy as np
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import concatenate, Dropout, GlobalAveragePooling2D, Dense
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.optimizers import Adam
+from skopt.space import Integer, Real
+from skopt import Optimizer
+from skopt.utils import use_named_args
+from skopt import gp_minimize
+from tensorflow.keras.callbacks import EarlyStopping
+
+# Load pre-trained ResNet model
+pretrained_model = load_model("ResNet_model.h5")
+
+# Data paths
+train_datagen = ImageDataGenerator(rescale=1./255, shear_range=0.2, zoom_range=0.2, horizontal_flip=True)
+test_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    '/content/drive/MyDrive/dataset', target_size=(224, 224), batch_size=32, class_mode='categorical'
+)
+test_generator = test_datagen.flow_from_directory(
+    '/content/drive/MyDrive/dataset', target_size=(224, 224), batch_size=32, class_mode='categorical'
+)
+
+# Define hyperparameter search space
+search_space = [
+    Integer(low=2, high=4, name='resnet_blocks'),
+    Integer(low=64, high=256, name='dense_units'),
+    Real(low=0.001, high=0.01, prior='log-uniform', name='learning_rate'),
+    Real(low=0.0, high=0.5, prior='uniform', name='dropout_rate'),
+    Real(low=0.0, high=0.01, prior='uniform', name='l2_reg')
+]
+
+# Define model creation function
+@use_named_args(search_space)
+def create_model(resnet_blocks, dense_units, learning_rate, dropout_rate, l2_reg):
+    base_model = pretrained_model.layers[0]  # Use the pre-trained model's layers
+    for layer in base_model.layers[:resnet_blocks]:
+        layer.trainable = False
+
+    x1 = base_model.output
+    x2 = base_model.get_layer('conv5_x').output
+    x3 = base_model.get_layer('conv4_6').output
+    x4 = base_model.get_layer('conv4_3').output
+    x5 = base_model.get_layer('conv3_4').output
+
+    x1 = GlobalAveragePooling2D()(x1)
+    x2 = GlobalAveragePooling2D()(x2)
+    x3 = GlobalAveragePooling2D()(x3)
+    x4 = GlobalAveragePooling2D()(x4)
+    x5 = GlobalAveragePooling2D()(x5)
+
+    merged = concatenate([x1, x2, x3, x4, x5])
+    x = Dense(dense_units, activation='relu')(merged)
+    x = Dropout(dropout_rate)(x)
+    predictions = Dense(train_generator.num_classes, activation='softmax')(x)
+
+    model = Model(inputs=base_model.input, outputs=predictions)
+
+    model.compile(optimizer=Adam(learning_rate=learning_rate),
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+
+    return model
+
+# Define objective function
+def objective(resnet_blocks, dense_units, learning_rate, dropout_rate, l2_reg):
+    model = create_model(resnet_blocks, dense_units, learning_rate, dropout_rate, l2_reg)
+
+    early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, restore_best_weights=True)
+
+    history = model.fit(train_generator, epochs=20, validation_data=test_generator, callbacks=[early_stop])
+
+    val_accuracy = max(history.history['val_accuracy'])
+
+    print("Validation Accuracy:", val_accuracy)
+
+    return -val_accuracy
+
+# Initialize the optimizer
+optimizer = Optimizer(search_space, base_estimator="GP", acq_func="EI", n_initial_points=10)
+
+# Perform Bayesian optimization
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")  # Suppress all warnings
+    for _ in range(30):
+        try:
+            x = optimizer.ask()
+            print("Ask:", x)
+            y = objective(*x)
+            optimizer.tell(x, y)
+        except Exception as e:
+            print("Error:", e)
+
+# Get the best hyperparameters
+best_params = None
+if optimizer.yi:
+    best_params_index = np.argmin(optimizer.yi)
+    best_params = optimizer.Xi[best_params_index]
+    print("Best hyperparameters:", best_params)
+else:
+    print("No points have been evaluated yet, so there are no best parameters.")
+
+if best_params:
+    # Train the best model
+    best_model = create_model(*best_params)
+    best_model.fit(train_generator, epochs=20, validation_data=test_generator)
+
+    # Evaluate the best model
+    loss, accuracy = best_model.evaluate(test_generator)
+    print("Test loss:", loss)
+    print("Test accuracy:", accuracy)
+
