@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"> <!-- Link to external CSS file -->
+</head>
+<body>
+    <div class="container">
+        <h1>Prediction Result</h1>
+        <p>Predicted class: {{ predicted_class }}</p>
+        <p>Confidence: {{ confidence }}</p>
+        <form action="/" method="get">
+            <button type="submit" class="refresh-button">Refresh</button>
+        </form>
+    </div>
+</body>
+</html>
